@@ -2,30 +2,26 @@
 .idea/
 *.iml
 
-# VS Code
-.vscode/
-
-# Java
+# Maven
 backend/target/
 
 # Python
-ml-service/__pycache__/
-ml-service/.pytest_cache/
-ml-service/.mypy_cache/
 ml-service/.venv/
 ml-service/venv/
+ml-service/__pycache__/
+ml-service/.pytest_cache/
 ml-service/*.pyc
+
+# React
+frontend/node_modules/
 
 # Logs
 *.log
-
-# OS
-.DS_Store
-Thumbs.db
 
 # Environment
 .env
 .env.*
 
-# Node (future frontend)
-node_modules/
+# OS
+.DS_Store
+Thumbs.db
