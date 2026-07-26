@@ -12,7 +12,8 @@ from routes.indicator import router as indicator_router
 # API Routers
 from api.prediction_router import router as prediction_router
 from api.training_router import router as training_router
-
+from api.metrics_router import router as metrics_router
+from api.comparison_router import router as comparison_router
 # Scheduler
 from scheduler.scheduler import scheduler
 
@@ -31,7 +32,8 @@ app.include_router(indicator_router)
 
 app.include_router(training_router)
 app.include_router(prediction_router)
-
+app.include_router(metrics_router)
+app.include_router(comparison_router)
 # ---------------------------------------------------------
 # Scheduler Events
 # ---------------------------------------------------------

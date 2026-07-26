@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -52,6 +52,11 @@ class TrainedModel(BaseModel):
     r2: float = Field(
         ...,
         description="R² Score"
+    )
+
+    parameters: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Best hyperparameters used during training"
     )
 
     trained_at: Optional[datetime] = Field(

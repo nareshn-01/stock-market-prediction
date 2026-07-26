@@ -1,38 +1,28 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 
 from database import SessionLocal
-from models.model_type import ModelType
-from repositories.model_metrics_repository import (
-    ModelMetricsRepository
-)
+from repositories.model_metrics_repository import ModelMetricsRepository
 from repositories.stock_repository import StockRepository
 from repositories.technical_indicator_repository import (
     TechnicalIndicatorRepository
 )
-from services.feature_engineering_service import (
-    FeatureEngineeringService
-)
-from services.training_service import (
-    TrainingService
-)
+from services.feature_engineering_service import FeatureEngineeringService
+from services.model_comparison_service import ModelComparisonService
+from services.training_service import TrainingService
 
 router = APIRouter(
-    prefix="/training",
-    tags=["Training"]
+    prefix="/comparison",
+    tags=["Model Comparison"]
 )
 
 
 @router.post("/{symbol}")
-def train_model(
-    symbol: str,
-    model_type: ModelType = Query(
-        default=ModelType.RANDOM_FOREST,
-        description="Training algorithm"
-    )
-):
+def compare_models(symbol: str):
+
     session = SessionLocal()
 
     try:
+
         stock_repository = StockRepository(session)
         indicator_repository = TechnicalIndicatorRepository(session)
         metrics_repository = ModelMetricsRepository(session)
@@ -42,7 +32,7 @@ def train_model(
         if stock is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"Stock '{symbol}' not found"
+                detail="Stock not found"
             )
 
         feature_service = FeatureEngineeringService(
@@ -55,16 +45,11 @@ def train_model(
             metrics_repository
         )
 
-        return training_service.train(
-            stock,
-            model_type
+        comparison_service = ModelComparisonService(
+            training_service
         )
 
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        return comparison_service.compare(stock)
 
     finally:
         session.close()

@@ -23,12 +23,25 @@ class FeatureEngineeringService:
 
         df = self._merge(prices, indicators)
 
+        if df.empty:
+            return df
+
+        # Convert all database values to numeric
+        df = self._convert_numeric_columns(df)
+
         df = self._create_lag_features(df)
         df = self._create_return_features(df)
         df = self._create_volatility_features(df)
         df = self._create_target(df)
 
-        df = df.dropna().reset_index(drop=True)
+        # Convert newly created columns too
+        df = self._convert_numeric_columns(df)
+
+        df = (
+            df
+            .dropna()
+            .reset_index(drop=True)
+        )
 
         return df
 
@@ -50,11 +63,13 @@ class FeatureEngineeringService:
         for price in prices:
             rows.append({
                 "timestamp": price.timestamp,
-                "open": price.open,
-                "high": price.high,
-                "low": price.low,
-                "close": price.close,
-                "volume": price.volume
+
+                "open": float(price.open) if price.open is not None else None,
+                "high": float(price.high) if price.high is not None else None,
+                "low": float(price.low) if price.low is not None else None,
+                "close": float(price.close) if price.close is not None else None,
+
+                "volume": int(price.volume) if price.volume is not None else None
             })
 
         return pd.DataFrame(rows)
@@ -66,32 +81,34 @@ class FeatureEngineeringService:
         rows = []
 
         for indicator in indicators:
+
             rows.append({
+
                 "timestamp": indicator.timestamp,
 
-                "sma_20": indicator.sma_20,
-                "sma_50": indicator.sma_50,
-                "sma_200": indicator.sma_200,
+                "sma_20": float(indicator.sma_20) if indicator.sma_20 is not None else None,
+                "sma_50": float(indicator.sma_50) if indicator.sma_50 is not None else None,
+                "sma_200": float(indicator.sma_200) if indicator.sma_200 is not None else None,
 
-                "ema_12": indicator.ema_12,
-                "ema_26": indicator.ema_26,
+                "ema_12": float(indicator.ema_12) if indicator.ema_12 is not None else None,
+                "ema_26": float(indicator.ema_26) if indicator.ema_26 is not None else None,
 
-                "rsi_14": indicator.rsi_14,
+                "rsi_14": float(indicator.rsi_14) if indicator.rsi_14 is not None else None,
 
-                "macd": indicator.macd,
-                "macd_signal": indicator.macd_signal,
-                "macd_histogram": indicator.macd_histogram,
+                "macd": float(indicator.macd) if indicator.macd is not None else None,
+                "macd_signal": float(indicator.macd_signal) if indicator.macd_signal is not None else None,
+                "macd_histogram": float(indicator.macd_histogram) if indicator.macd_histogram is not None else None,
 
-                "bb_upper": indicator.bb_upper,
-                "bb_middle": indicator.bb_middle,
-                "bb_lower": indicator.bb_lower,
+                "bb_upper": float(indicator.bb_upper) if indicator.bb_upper is not None else None,
+                "bb_middle": float(indicator.bb_middle) if indicator.bb_middle is not None else None,
+                "bb_lower": float(indicator.bb_lower) if indicator.bb_lower is not None else None,
 
-                "atr_14": indicator.atr_14,
+                "atr_14": float(indicator.atr_14) if indicator.atr_14 is not None else None,
 
-                "plus_di_14": indicator.plus_di_14,
-                "minus_di_14": indicator.minus_di_14,
-                "dx_14": indicator.dx_14,
-                "adx_14": indicator.adx_14
+                "plus_di_14": float(indicator.plus_di_14) if indicator.plus_di_14 is not None else None,
+                "minus_di_14": float(indicator.minus_di_14) if indicator.minus_di_14 is not None else None,
+                "dx_14": float(indicator.dx_14) if indicator.dx_14 is not None else None,
+                "adx_14": float(indicator.adx_14) if indicator.adx_14 is not None else None
             })
 
         return pd.DataFrame(rows)
@@ -110,6 +127,22 @@ class FeatureEngineeringService:
 
         df = df.sort_values("timestamp")
         df.reset_index(drop=True, inplace=True)
+
+        return df
+
+    def _convert_numeric_columns(self, df):
+
+        numeric_columns = [
+            column
+            for column in df.columns
+            if column != "timestamp"
+        ]
+
+        for column in numeric_columns:
+            df[column] = pd.to_numeric(
+                df[column],
+                errors="coerce"
+            )
 
         return df
 
