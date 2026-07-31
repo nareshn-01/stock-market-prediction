@@ -1,12 +1,11 @@
-from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 
 class TrainedModel(BaseModel):
     """
-    Metadata for a trained machine learning model.
+    Response model returned after training a machine learning model.
     """
 
     symbol: str = Field(
@@ -21,12 +20,12 @@ class TrainedModel(BaseModel):
 
     model_path: str = Field(
         ...,
-        description="Location of saved model"
+        description="Location of the saved model"
     )
 
     samples: int = Field(
         ...,
-        description="Total number of samples used"
+        description="Total samples used for training"
     )
 
     train_samples: int = Field(
@@ -54,14 +53,9 @@ class TrainedModel(BaseModel):
         description="R² Score"
     )
 
-    parameters: Optional[dict[str, Any]] = Field(
-        default=None,
-        description="Best hyperparameters used during training"
-    )
-
-    trained_at: Optional[datetime] = Field(
-        default_factory=datetime.utcnow,
-        description="Training timestamp"
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Model hyperparameters"
     )
 
     class Config:

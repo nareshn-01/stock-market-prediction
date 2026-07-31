@@ -1,25 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
 
-from repositories.stock_repository import StockRepository
-from repositories.technical_indicator_repository import (
-    TechnicalIndicatorRepository
+from models.model_type import ModelType
+
+from repositories.model_metrics_repository import (
+    ModelMetricsRepository
 )
 from repositories.prediction_repository import (
     PredictionRepository
+)
+from repositories.stock_repository import StockRepository
+from repositories.technical_indicator_repository import (
+    TechnicalIndicatorRepository
 )
 
 from services.feature_engineering_service import (
     FeatureEngineeringService
 )
-from services.training_service import TrainingService
-from services.prediction_service import PredictionService
+from services.model_comparison_service import (
+    ModelComparisonService
+)
 from services.prediction_history_service import (
     PredictionHistoryService
 )
-
+from services.prediction_service import PredictionService
+from services.training_service import TrainingService
 
 router = APIRouter(
     prefix="/prediction",
@@ -34,11 +41,20 @@ router = APIRouter(
 @router.post("/train/{symbol}")
 def train_model(
     symbol: str,
+    model_type: ModelType = Query(
+        default=ModelType.RANDOM_FOREST,
+        description="Machine learning model"
+    ),
+    tune: bool = Query(
+        default=False,
+        description="Enable hyperparameter tuning"
+    ),
     db: Session = Depends(get_db)
 ):
 
     stock_repo = StockRepository(db)
     indicator_repo = TechnicalIndicatorRepository(db)
+    metrics_repo = ModelMetricsRepository(db)
 
     stock = stock_repo.get_by_symbol(symbol)
 
@@ -54,10 +70,61 @@ def train_model(
     )
 
     training_service = TrainingService(
-        feature_service
+        feature_service,
+        metrics_repo
     )
 
-    return training_service.train(stock)
+    return training_service.train(
+        stock=stock,
+        model_type=model_type,
+        tune=tune
+    )
+
+
+# ---------------------------------------------------------
+# Compare All Models
+# ---------------------------------------------------------
+
+@router.post("/compare/{symbol}")
+def compare_models(
+    symbol: str,
+    tune: bool = Query(
+        default=False,
+        description="Enable hyperparameter tuning"
+    ),
+    db: Session = Depends(get_db)
+):
+
+    stock_repo = StockRepository(db)
+    indicator_repo = TechnicalIndicatorRepository(db)
+    metrics_repo = ModelMetricsRepository(db)
+
+    stock = stock_repo.get_by_symbol(symbol)
+
+    if stock is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Stock not found."
+        )
+
+    feature_service = FeatureEngineeringService(
+        stock_repo,
+        indicator_repo
+    )
+
+    training_service = TrainingService(
+        feature_service,
+        metrics_repo
+    )
+
+    comparison_service = ModelComparisonService(
+        training_service
+    )
+
+    return comparison_service.compare(
+        stock=stock,
+        tune=tune
+    )
 
 
 # ---------------------------------------------------------
@@ -67,12 +134,17 @@ def train_model(
 @router.get("/{symbol}")
 def predict(
     symbol: str,
+    model_type: ModelType = Query(
+        default=ModelType.RANDOM_FOREST,
+        description="Machine learning model"
+    ),
     db: Session = Depends(get_db)
 ):
 
     stock_repo = StockRepository(db)
     indicator_repo = TechnicalIndicatorRepository(db)
     prediction_repo = PredictionRepository(db)
+    metrics_repo = ModelMetricsRepository(db)
 
     stock = stock_repo.get_by_symbol(symbol)
 
@@ -88,24 +160,36 @@ def predict(
     )
 
     prediction_service = PredictionService(
-        feature_service,
-        prediction_repo
+        feature_service=feature_service,
+        prediction_repository=prediction_repo,
+        metrics_repository=metrics_repo
     )
 
-    return prediction_service.predict(stock)
-
+    return prediction_service.predict(
+        stock=stock,
+        model_name=model_type.value
+    )
 
 # ---------------------------------------------------------
-# Train All Models
+# Train All Stocks
 # ---------------------------------------------------------
 
 @router.post("/train-all")
 def train_all(
+    model_type: ModelType = Query(
+        default=ModelType.RANDOM_FOREST,
+        description="Machine learning model"
+    ),
+    tune: bool = Query(
+        default=False,
+        description="Enable hyperparameter tuning"
+    ),
     db: Session = Depends(get_db)
 ):
 
     stock_repo = StockRepository(db)
     indicator_repo = TechnicalIndicatorRepository(db)
+    metrics_repo = ModelMetricsRepository(db)
 
     feature_service = FeatureEngineeringService(
         stock_repo,
@@ -113,7 +197,8 @@ def train_all(
     )
 
     training_service = TrainingService(
-        feature_service
+        feature_service,
+        metrics_repo
     )
 
     stocks = stock_repo.get_all()
@@ -121,11 +206,19 @@ def train_all(
     results = []
 
     for stock in stocks:
+
         try:
+
             results.append(
-                training_service.train(stock)
+                training_service.train(
+                    stock=stock,
+                    model_type=model_type,
+                    tune=tune
+                )
             )
+
         except Exception as e:
+
             results.append({
                 "symbol": stock.symbol,
                 "error": str(e)

@@ -32,10 +32,17 @@ class TrainingService:
     def train(
         self,
         stock,
-        model_type: ModelType = ModelType.RANDOM_FOREST
+        model_type: ModelType = ModelType.RANDOM_FOREST,
+        tune: bool = False
     ) -> TrainedModel:
         """
         Train the selected model for the given stock.
+
+        Parameters
+        ----------
+        tune : bool
+            False -> Fast training using default parameters.
+            True  -> Hyperparameter tuning.
         """
 
         df = self.feature_service.build_dataset(stock)
@@ -52,16 +59,13 @@ class TrainingService:
             ]
         )
 
-        # Convert all features to numeric
         X = X.apply(pd.to_numeric, errors="coerce")
 
-        # Convert target to numeric
         y = pd.to_numeric(
             df["target"],
             errors="coerce"
         )
 
-        # Remove invalid rows
         valid_rows = X.notna().all(axis=1) & y.notna()
 
         X = X.loc[valid_rows]
@@ -86,7 +90,8 @@ class TrainingService:
 
         trainer.train(
             X_train,
-            y_train
+            y_train,
+            tune=tune
         )
 
         predictions = trainer.predict(

@@ -35,12 +35,22 @@ class YahooService:
     def download_history(
         self,
         symbol: str,
-        period: str = "1y",
+        period: str = "10y",
         interval: str = "1d"
     ) -> pd.DataFrame:
+        """
+        Download historical OHLCV data from Yahoo Finance.
+
+        Default:
+            period = 10 years
+            interval = 1 day
+        """
 
         try:
-            logger.info(f"Downloading historical data for {symbol}")
+            logger.info(
+                f"Downloading historical data for {symbol} "
+                f"(period={period}, interval={interval})"
+            )
 
             df = yf.download(
                 tickers=symbol,
@@ -53,14 +63,33 @@ class YahooService:
 
             if df.empty:
                 logger.warning(f"No data found for {symbol}")
-                raise ValueError(f"No data found for {symbol}")
+                raise ValueError(
+                    f"No historical data found for {symbol}"
+                )
 
             # Flatten MultiIndex columns
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
 
+            # Remove duplicate timestamps
+            df = df[~df.index.duplicated(keep="last")]
+
+            # Sort chronologically
+            df = df.sort_index()
+
+            # Remove rows with missing OHLCV values
+            df = df.dropna(
+                subset=[
+                    "Open",
+                    "High",
+                    "Low",
+                    "Close",
+                    "Volume"
+                ]
+            )
+
             logger.info(
-                f"Downloaded {len(df)} records for {symbol}"
+                f"Downloaded {len(df)} historical records for {symbol}"
             )
 
             return df
@@ -69,6 +98,7 @@ class YahooService:
             logger.exception(
                 f"Failed to download data for {symbol}: {e}"
             )
+
             raise ValueError(
                 f"Failed to download data for {symbol}: {e}"
             )
@@ -89,8 +119,15 @@ class YahooService:
             if dt.tzinfo is not None:
                 dt = dt.replace(tzinfo=None)
 
-            # Skip incomplete rows
-            if row[["Open", "High", "Low", "Close", "Volume"]].isnull().any():
+            if row[
+                [
+                    "Open",
+                    "High",
+                    "Low",
+                    "Close",
+                    "Volume"
+                ]
+            ].isnull().any():
                 continue
 
             price = PriceHistory(
@@ -107,7 +144,7 @@ class YahooService:
             prices.append(price)
 
         logger.info(
-            f"Converted {len(prices)} records for {stock.symbol}"
+            f"Converted {len(prices)} price records for {stock.symbol}"
         )
 
         return prices

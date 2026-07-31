@@ -1,14 +1,23 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
+from logger import logger
 
 from models.technical_indicator import TechnicalIndicator
-from repositories.stock_repository import StockRepository
+
+from repositories.stock_repository import (
+    StockRepository
+)
+
 from repositories.technical_indicator_repository import (
     TechnicalIndicatorRepository
 )
-
-
 class IndicatorService:
+
+    """
+    Calculates and stores technical indicators
+    for stock price history.
+    """
 
     def __init__(
         self,
@@ -17,10 +26,18 @@ class IndicatorService:
     ):
         self.stock_repository = stock_repository
         self.indicator_repository = indicator_repository
+    # ---------------------------------------------------------
+    # Update Indicator Entity
+    # ---------------------------------------------------------
 
-    def _update_indicator(self, indicator, row):
+    def _update_indicator(
+        self,
+        indicator,
+        row
+    ):
 
         field_mapping = {
+
             "sma_20": "sma_20",
             "sma_50": "sma_50",
             "sma_200": "sma_200",
@@ -46,20 +63,48 @@ class IndicatorService:
             "adx": "adx_14"
         }
 
-        for df_column, model_field in field_mapping.items():
+        for dataframe_column, model_field in field_mapping.items():
 
-            value = row.get(df_column)
+            value = row.get(dataframe_column)
 
             if pd.isna(value):
-                setattr(indicator, model_field, None)
+
+                setattr(
+                    indicator,
+                    model_field,
+                    None
+                )
+
             else:
-                setattr(indicator, model_field, float(value))
 
-    def calculate_indicators(self, stock):
+                setattr(
+                    indicator,
+                    model_field,
+                    float(value)
+                )
+    # ---------------------------------------------------------
+    # Calculate Technical Indicators
+    # ---------------------------------------------------------
 
-        prices = self.stock_repository.get_price_history(stock.id)
+    def calculate_indicators(
+        self,
+        stock
+    ):
+
+        logger.info(
+            f"Calculating indicators for {stock.symbol}"
+        )
+
+        prices = self.stock_repository.get_price_history(
+            stock.id
+        )
 
         if len(prices) < 20:
+
+            logger.warning(
+                f"{stock.symbol}: insufficient historical data."
+            )
+
             return {
                 "symbol": stock.symbol,
                 "message": "Not enough historical data"
@@ -68,42 +113,101 @@ class IndicatorService:
         df = pd.DataFrame([
             {
                 "timestamp": price.timestamp,
+
                 "open": float(price.open),
+
                 "high": float(price.high),
+
                 "low": float(price.low),
+
                 "close": float(price.close)
+
             }
             for price in prices
         ])
 
-        df.sort_values("timestamp", inplace=True)
-        df.reset_index(drop=True, inplace=True)
+        if df.empty:
+
+            logger.warning(
+                f"{stock.symbol}: no price history found."
+            )
+
+            return {
+                "symbol": stock.symbol,
+                "message": "No price history found."
+            }
+
+        df.sort_values(
+            "timestamp",
+            inplace=True
+        )
+
+        df.reset_index(
+            drop=True,
+            inplace=True
+        )
+
+        logger.info(
+            f"{stock.symbol}: processing {len(df)} price records."
+        )
+        # ======================================================
+        # Simple Moving Averages (SMA)
+        # ======================================================
+
+        logger.info(
+            f"{stock.symbol}: calculating SMA indicators."
+        )
+
+        df["sma_20"] = (
+            df["close"]
+            .rolling(window=20)
+            .mean()
+        )
+
+        df["sma_50"] = (
+            df["close"]
+            .rolling(window=50)
+            .mean()
+        )
+
+        df["sma_200"] = (
+            df["close"]
+            .rolling(window=200)
+            .mean()
+        )
 
         # ======================================================
-        # SMA
+        # Exponential Moving Averages (EMA)
         # ======================================================
 
-        df["sma_20"] = df["close"].rolling(window=20).mean()
-        df["sma_50"] = df["close"].rolling(window=50).mean()
-        df["sma_200"] = df["close"].rolling(window=200).mean()
+        logger.info(
+            f"{stock.symbol}: calculating EMA indicators."
+        )
 
-        # ======================================================
-        # EMA
-        # ======================================================
+        df["ema_12"] = (
+            df["close"]
+            .ewm(
+                span=12,
+                adjust=False
+            )
+            .mean()
+        )
 
-        df["ema_12"] = df["close"].ewm(
-            span=12,
-            adjust=False
-        ).mean()
-
-        df["ema_26"] = df["close"].ewm(
-            span=26,
-            adjust=False
-        ).mean()
-
+        df["ema_26"] = (
+            df["close"]
+            .ewm(
+                span=26,
+                adjust=False
+            )
+            .mean()
+        )
         # ======================================================
         # MACD
         # ======================================================
+
+        logger.info(
+            f"{stock.symbol}: calculating MACD."
+        )
 
         df["macd"] = (
             df["ema_12"] -
@@ -123,30 +227,55 @@ class IndicatorService:
             df["macd"] -
             df["macd_signal"]
         )
-
         # ======================================================
         # RSI (14)
         # ======================================================
 
+        logger.info(
+            f"{stock.symbol}: calculating RSI."
+        )
+
         delta = df["close"].diff()
 
-        gain = delta.clip(lower=0)
+        gain = delta.clip(
+            lower=0
+        )
 
-        loss = (-delta).clip(lower=0)
+        loss = (
+            -delta
+        ).clip(
+            lower=0
+        )
 
-        avg_gain = gain.rolling(window=14).mean()
+        avg_gain = (
+            gain
+            .rolling(window=14)
+            .mean()
+        )
 
-        avg_loss = loss.rolling(window=14).mean()
+        avg_loss = (
+            loss
+            .rolling(window=14)
+            .mean()
+        )
 
         rs = avg_gain / avg_loss
 
-        df["rsi_14"] = 100 - (
-            100 / (1 + rs)
+        df["rsi_14"] = (
+            100 -
+            (
+                100 /
+                (1 + rs)
+            )
         )
 
         # ======================================================
-        # Bollinger Bands (20)
+        # Bollinger Bands
         # ======================================================
+
+        logger.info(
+            f"{stock.symbol}: calculating Bollinger Bands."
+        )
 
         df["bb_middle"] = (
             df["close"]
@@ -174,6 +303,10 @@ class IndicatorService:
         # ATR (14)
         # ======================================================
 
+        logger.info(
+            f"{stock.symbol}: calculating ATR."
+        )
+
         previous_close = df["close"].shift(1)
 
         tr1 = (
@@ -192,22 +325,29 @@ class IndicatorService:
         ).abs()
 
         df["true_range"] = pd.concat(
-            [tr1, tr2, tr3],
+            [
+                tr1,
+                tr2,
+                tr3
+            ],
             axis=1
         ).max(axis=1)
 
         df["atr_14"] = (
             df["true_range"]
             .ewm(
-                alpha=1/14,
+                alpha=1 / 14,
                 adjust=False
             )
             .mean()
         )
+        # ======================================================
+        # Directional Movement (+DM / -DM)
+        # ======================================================
 
-        # ======================================================
-        # Directional Movement
-        # ======================================================
+        logger.info(
+            f"{stock.symbol}: calculating Directional Indicators."
+        )
 
         up_move = df["high"].diff()
 
@@ -229,14 +369,10 @@ class IndicatorService:
             0.0
         )
 
-        # ======================================================
-        # +DI / -DI
-        # ======================================================
-
         plus_dm_14 = (
             plus_dm
             .ewm(
-                alpha=1/14,
+                alpha=1 / 14,
                 adjust=False
             )
             .mean()
@@ -245,7 +381,7 @@ class IndicatorService:
         minus_dm_14 = (
             minus_dm
             .ewm(
-                alpha=1/14,
+                alpha=1 / 14,
                 adjust=False
             )
             .mean()
@@ -272,28 +408,35 @@ class IndicatorService:
             df["minus_di"]
         )
 
-        di_sum = di_sum.replace(0, np.nan)
+        di_sum = di_sum.replace(
+            0,
+            np.nan
+        )
 
         df["dx"] = (
-    (
-        (
-            df["plus_di"] -
-            df["minus_di"]
-        ).abs()
-        /
-        di_sum
-    )
-    * 100
-)
+            (
+                (
+                    df["plus_di"] -
+                    df["minus_di"]
+                ).abs()
+                /
+                di_sum
+            ) * 100
+        )
 
         # ======================================================
-        # ADX (Simple Rolling)
+        # ADX
         # ======================================================
-        df["dx"] = pd.to_numeric(df["dx"], errors="coerce")
+
+        df["dx"] = pd.to_numeric(
+            df["dx"],
+            errors="coerce"
+        )
+
         df["adx"] = (
             df["dx"]
             .ewm(
-                alpha=1/14,
+                alpha=1 / 14,
                 adjust=False
             )
             .mean()
@@ -307,15 +450,30 @@ class IndicatorService:
             errors="ignore"
         )
 
+        logger.info(
+            f"{stock.symbol}: all indicators calculated successfully."
+        )
+        # ======================================================
+        # Save Indicators
+        # ======================================================
+
         inserted = 0
         updated = 0
 
         new_indicators = []
+
+        logger.info(
+            f"{stock.symbol}: saving indicators."
+        )
+
         for _, row in df.iterrows():
 
-            indicator = self.indicator_repository.get_by_stock_timestamp(
-                stock.id,
-                row["timestamp"]
+            indicator = (
+                self.indicator_repository
+                .get_by_stock_timestamp(
+                    stock.id,
+                    row["timestamp"]
+                )
             )
 
             if indicator is not None:
@@ -340,16 +498,25 @@ class IndicatorService:
                     row
                 )
 
-                new_indicators.append(indicator)
+                new_indicators.append(
+                    indicator
+                )
 
                 inserted += 1
 
         if new_indicators:
+
             self.indicator_repository.save_all(
                 new_indicators
             )
 
         self.indicator_repository.commit()
+
+        logger.info(
+            f"{stock.symbol}: "
+            f"{inserted} inserted, "
+            f"{updated} updated."
+        )
 
         return {
             "symbol": stock.symbol,
@@ -357,3 +524,63 @@ class IndicatorService:
             "records_inserted": inserted,
             "records_updated": updated
         }
+
+    # ---------------------------------------------------------
+    # Alias
+    # ---------------------------------------------------------
+
+    def calculate(
+        self,
+        stock
+    ):
+        """
+        Alias for calculate_indicators().
+        """
+
+        return self.calculate_indicators(
+            stock
+        )
+
+    # ---------------------------------------------------------
+    # Calculate All Stocks
+    # ---------------------------------------------------------
+
+    def calculate_all(
+        self
+    ):
+        """
+        Calculate indicators for all stocks.
+        """
+
+        stocks = self.stock_repository.get_all()
+
+        results = []
+
+        logger.info(
+            f"Calculating indicators for {len(stocks)} stocks."
+        )
+
+        for stock in stocks:
+
+            try:
+
+                results.append(
+                    self.calculate_indicators(
+                        stock
+                    )
+                )
+
+            except Exception as ex:
+
+                logger.exception(ex)
+
+                results.append({
+                    "symbol": stock.symbol,
+                    "error": str(ex)
+                })
+
+        logger.info(
+            "Indicator calculation completed."
+        )
+
+        return results

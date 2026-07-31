@@ -1,3 +1,4 @@
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from models.prediction_history import PredictionHistory
@@ -5,13 +6,19 @@ from models.prediction_history import PredictionHistory
 
 class PredictionRepository:
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session
+    ):
         self.db = db
 
     def save(
         self,
         prediction: PredictionHistory
     ) -> PredictionHistory:
+        """
+        Save prediction history.
+        """
 
         self.db.add(prediction)
         self.db.commit()
@@ -19,27 +26,14 @@ class PredictionRepository:
 
         return prediction
 
-    def get_latest(
-        self,
-        symbol: str
-    ):
-
-        return (
-            self.db.query(PredictionHistory)
-            .filter(
-                PredictionHistory.symbol == symbol.upper()
-            )
-            .order_by(
-                PredictionHistory.prediction_time.desc()
-            )
-            .first()
-        )
-
     def get_history(
         self,
         symbol: str,
         limit: int = 100
     ):
+        """
+        Return prediction history ordered by newest first.
+        """
 
         return (
             self.db.query(PredictionHistory)
@@ -47,38 +41,49 @@ class PredictionRepository:
                 PredictionHistory.symbol == symbol.upper()
             )
             .order_by(
-                PredictionHistory.prediction_time.desc()
+                desc(PredictionHistory.created_at)
             )
             .limit(limit)
             .all()
         )
 
-    def delete_history(
+    def get_latest(
         self,
         symbol: str
-    ) -> int:
+    ):
+        """
+        Return latest prediction.
+        """
 
-        deleted = (
+        return (
             self.db.query(PredictionHistory)
             .filter(
                 PredictionHistory.symbol == symbol.upper()
             )
-            .delete()
+            .order_by(
+                desc(PredictionHistory.created_at)
+            )
+            .first()
         )
 
-        self.db.commit()
-
-        return deleted
-
-    def get_all(
+    def get_by_signal(
         self,
+        symbol: str,
+        signal: str,
         limit: int = 100
     ):
+        """
+        Return predictions filtered by signal.
+        """
 
         return (
             self.db.query(PredictionHistory)
+            .filter(
+                PredictionHistory.symbol == symbol.upper(),
+                PredictionHistory.signal == signal.upper()
+            )
             .order_by(
-                PredictionHistory.prediction_time.desc()
+                desc(PredictionHistory.created_at)
             )
             .limit(limit)
             .all()
@@ -88,6 +93,9 @@ class PredictionRepository:
         self,
         symbol: str
     ) -> int:
+        """
+        Count stored predictions.
+        """
 
         return (
             self.db.query(PredictionHistory)
@@ -96,3 +104,38 @@ class PredictionRepository:
             )
             .count()
         )
+
+    def exists(
+        self,
+        symbol: str
+    ) -> bool:
+        """
+        Check whether prediction history exists.
+        """
+
+        return self.count(symbol) > 0
+
+    def delete_history(
+        self,
+        symbol: str
+    ) -> int:
+        """
+        Delete all prediction history for a stock.
+
+        Returns:
+            Number of deleted records.
+        """
+
+        deleted = (
+            self.db.query(PredictionHistory)
+            .filter(
+                PredictionHistory.symbol == symbol.upper()
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        self.db.commit()
+
+        return deleted

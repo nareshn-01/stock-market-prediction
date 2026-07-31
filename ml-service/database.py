@@ -1,12 +1,12 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from config import DATABASE_URL
-from models import Base
 
 engine = create_engine(
     DATABASE_URL,
-    echo=True
+    echo=False,
+    pool_pre_ping=True
 )
 
 SessionLocal = sessionmaker(
@@ -15,10 +15,14 @@ SessionLocal = sessionmaker(
     bind=engine
 )
 
+Base = declarative_base()
+
 
 def get_db():
     db = SessionLocal()
+
     try:
         yield db
+
     finally:
         db.close()

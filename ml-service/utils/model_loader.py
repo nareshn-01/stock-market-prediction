@@ -1,85 +1,153 @@
-import os
-import joblib
+from pathlib import Path
 from typing import Any, List
+
+import joblib
 
 
 class ModelLoader:
     """
-    Utility class for managing trained ML models.
+    Utility class for saving, loading and managing trained ML models.
     """
 
-    MODEL_DIR = "saved_models"
+    MODEL_DIR = Path("saved_models")
 
     @classmethod
     def _ensure_directory(cls):
-        """
-        Create model directory if it doesn't exist.
-        """
-        os.makedirs(cls.MODEL_DIR, exist_ok=True)
+        cls.MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def get_model_path(cls, symbol: str) -> str:
-        """
-        Returns the model file path.
-        """
+    def _normalize(cls, value: str) -> str:
+        return value.strip().upper()
+
+    @classmethod
+    def get_model_path(
+        cls,
+        symbol: str,
+        model_name: str
+    ) -> Path:
+
         cls._ensure_directory()
-        return os.path.join(cls.MODEL_DIR, f"{symbol.upper()}.pkl")
+
+        symbol = cls._normalize(symbol)
+        model_name = cls._normalize(model_name)
+
+        return cls.MODEL_DIR / f"{symbol}_{model_name}.pkl"
 
     @classmethod
-    def save_model(cls, symbol: str, model: Any) -> str:
-        """
-        Save trained model.
-        """
-        path = cls.get_model_path(symbol)
+    def save_model(
+        cls,
+        symbol: str,
+        model: Any,
+        model_name: str
+    ) -> str:
+
+        if model is None:
+            raise ValueError("Cannot save an empty model.")
+
+        path = cls.get_model_path(
+            symbol,
+            model_name
+        )
 
         joblib.dump(model, path)
 
-        return path
+        return str(path)
 
     @classmethod
-    def load_model(cls, symbol: str) -> Any:
-        """
-        Load trained model.
-        """
-        path = cls.get_model_path(symbol)
+    def load_model(
+        cls,
+        symbol: str,
+        model_name: str
+    ) -> Any:
 
-        if not os.path.exists(path):
+        path = cls.get_model_path(
+            symbol,
+            model_name
+        )
+
+        if not path.exists():
             raise FileNotFoundError(
-                f"Model not found for symbol: {symbol}"
+                f"Model '{model_name}' for '{symbol}' does not exist."
             )
 
         return joblib.load(path)
 
     @classmethod
-    def model_exists(cls, symbol: str) -> bool:
-        """
-        Check whether model exists.
-        """
-        path = cls.get_model_path(symbol)
+    def model_exists(
+        cls,
+        symbol: str,
+        model_name: str
+    ) -> bool:
 
-        return os.path.exists(path)
+        return cls.get_model_path(
+            symbol,
+            model_name
+        ).exists()
 
     @classmethod
-    def delete_model(cls, symbol: str):
-        """
-        Delete a trained model.
-        """
-        path = cls.get_model_path(symbol)
+    def delete_model(
+        cls,
+        symbol: str,
+        model_name: str
+    ) -> bool:
 
-        if os.path.exists(path):
-            os.remove(path)
+        path = cls.get_model_path(
+            symbol,
+            model_name
+        )
+
+        if path.exists():
+            path.unlink()
+            return True
+
+        return False
+
+    @classmethod
+    def delete_all_models(
+        cls,
+        symbol: str
+    ) -> int:
+
+        cls._ensure_directory()
+
+        symbol = cls._normalize(symbol)
+
+        deleted = 0
+
+        for file in cls.MODEL_DIR.glob(f"{symbol}_*.pkl"):
+            file.unlink()
+            deleted += 1
+
+        return deleted
 
     @classmethod
     def list_models(cls) -> List[str]:
-        """
-        List all trained models.
-        """
+
         cls._ensure_directory()
 
-        models = []
+        return sorted(
+            file.stem
+            for file in cls.MODEL_DIR.glob("*.pkl")
+        )
 
-        for file in os.listdir(cls.MODEL_DIR):
-            if file.endswith(".pkl"):
-                models.append(file.replace(".pkl", ""))
+    @classmethod
+    def list_models_for_symbol(
+        cls,
+        symbol: str
+    ) -> List[str]:
 
-        return sorted(models)
+        cls._ensure_directory()
+
+        symbol = cls._normalize(symbol)
+
+        return sorted(
+            file.stem
+            for file in cls.MODEL_DIR.glob(f"{symbol}_*.pkl")
+        )
+
+    @classmethod
+    def get_model_count(cls) -> int:
+
+        cls._ensure_directory()
+
+        return len(list(cls.MODEL_DIR.glob("*.pkl")))

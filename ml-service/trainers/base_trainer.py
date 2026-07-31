@@ -7,10 +7,18 @@ class BaseTrainer(ABC):
     def train(
         self,
         X_train,
-        y_train
+        y_train,
+        tune: bool = False
     ):
         """
         Train the model.
+
+        Parameters
+        ----------
+        X_train : Training features
+        y_train : Training labels
+        tune : False -> Fast training
+               True  -> Hyperparameter tuning
         """
         pass
 
@@ -20,7 +28,7 @@ class BaseTrainer(ABC):
         X_test
     ):
         """
-        Predict values.
+        Predict values for the given features.
         """
         pass
 
@@ -30,7 +38,7 @@ class BaseTrainer(ABC):
         symbol: str
     ):
         """
-        Save trained model.
+        Save the trained model.
         """
         pass
 
@@ -38,7 +46,7 @@ class BaseTrainer(ABC):
     @abstractmethod
     def model_name(self):
         """
-        Return model name.
+        Name of the ML algorithm.
         """
         pass
 
@@ -46,6 +54,22 @@ class BaseTrainer(ABC):
     @abstractmethod
     def version(self):
         """
-        Return model version.
+        Model version.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def estimator(self):
+        """
+        Return the underlying estimator.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def parameters(self):
+        """
+        Return the parameters used for training.
         """
         pass

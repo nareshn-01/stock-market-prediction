@@ -1,12 +1,12 @@
 from datetime import datetime
-from typing import Optional
+from typing import List
 
 from pydantic import BaseModel, Field
 
 
 class Prediction(BaseModel):
     """
-    Prediction response model.
+    Response model for stock price prediction.
     """
 
     symbol: str = Field(
@@ -16,7 +16,7 @@ class Prediction(BaseModel):
 
     current_price: float = Field(
         ...,
-        description="Current closing price"
+        description="Latest market price"
     )
 
     predicted_price: float = Field(
@@ -26,7 +26,7 @@ class Prediction(BaseModel):
 
     change_percent: float = Field(
         ...,
-        description="Expected percentage change"
+        description="Expected percentage price change"
     )
 
     signal: str = Field(
@@ -34,7 +34,29 @@ class Prediction(BaseModel):
         description="Trading signal"
     )
 
-    prediction_time: Optional[datetime] = Field(
+    model: str = Field(
+        ...,
+        description="Machine learning model used"
+    )
+
+    confidence: float = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Prediction confidence (%)"
+    )
+
+    risk: str = Field(
+        ...,
+        description="Risk level"
+    )
+
+    reasons: List[str] = Field(
+        default_factory=list,
+        description="Reasons behind the prediction"
+    )
+
+    prediction_time: datetime = Field(
         default_factory=datetime.utcnow,
         description="Prediction timestamp"
     )

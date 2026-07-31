@@ -1,3 +1,4 @@
+from sqlalchemy import asc
 from sqlalchemy.orm import Session
 
 from models.model_metrics import ModelMetrics
@@ -5,44 +6,178 @@ from models.model_metrics import ModelMetrics
 
 class ModelMetricsRepository:
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session
+    ):
         self.db = db
 
-    def save(self, metrics: ModelMetrics):
+    # ---------------------------------------------------------
+    # Save
+    # ---------------------------------------------------------
+
+    def save(
+        self,
+        metrics: ModelMetrics
+    ) -> ModelMetrics:
+
         self.db.add(metrics)
         self.db.commit()
         self.db.refresh(metrics)
+
         return metrics
 
-    def get_latest(self, symbol: str):
+    # ---------------------------------------------------------
+    # Get All Models
+    # ---------------------------------------------------------
+
+    def find_all(
+        self,
+        symbol: str
+    ):
+        """
+        Return all trained models for a stock,
+        ordered by RMSE.
+        """
+
         return (
             self.db.query(ModelMetrics)
-            .filter(ModelMetrics.symbol == symbol)
-            .order_by(ModelMetrics.trained_at.desc())
+            .filter(
+                ModelMetrics.symbol == symbol
+            )
+            .order_by(
+                asc(ModelMetrics.rmse)
+            )
+            .all()
+        )
+
+    # ---------------------------------------------------------
+    # Best Model
+    # ---------------------------------------------------------
+
+    def find_best_model(
+        self,
+        symbol: str
+    ):
+        """
+        Return the model with the lowest RMSE.
+        """
+
+        return (
+            self.db.query(ModelMetrics)
+            .filter(
+                ModelMetrics.symbol == symbol
+            )
+            .order_by(
+                asc(ModelMetrics.rmse)
+            )
             .first()
         )
 
-    def get_all(self):
+    # ---------------------------------------------------------
+    # Find By Model
+    # ---------------------------------------------------------
+
+    def find_by_model(
+        self,
+        symbol: str,
+        model_name: str
+    ):
+        """
+        Return metrics for a specific model.
+        """
+
         return (
             self.db.query(ModelMetrics)
-            .order_by(ModelMetrics.trained_at.desc())
-            .all()
+            .filter(
+                ModelMetrics.symbol == symbol,
+                ModelMetrics.model_name == model_name
+            )
+            .first()
         )
 
-    def get_by_symbol(self, symbol: str):
+    # ---------------------------------------------------------
+    # Latest Metrics
+    # ---------------------------------------------------------
+
+    def get_latest(
+        self,
+        symbol: str,
+        model_name: str
+    ) -> ModelMetrics:
+        """
+        Return the latest metrics for the given
+        symbol and model.
+        """
+
         return (
             self.db.query(ModelMetrics)
-            .filter(ModelMetrics.symbol == symbol)
-            .order_by(ModelMetrics.trained_at.desc())
-            .all()
+            .filter(
+                ModelMetrics.symbol == symbol,
+                ModelMetrics.model_name == model_name
+            )
+            .order_by(
+                ModelMetrics.created_at.desc()
+            )
+            .first()
         )
 
-    def delete(self, symbol: str):
+    # ---------------------------------------------------------
+    # Exists
+    # ---------------------------------------------------------
+
+    def exists(
+        self,
+        symbol: str,
+        model_name: str
+    ) -> bool:
+
         return (
+            self.find_by_model(
+                symbol,
+                model_name
+            )
+            is not None
+        )
+
+    # ---------------------------------------------------------
+    # Delete One
+    # ---------------------------------------------------------
+
+    def delete(
+        self,
+        symbol: str,
+        model_name: str
+    ):
+
+        metrics = self.find_by_model(
+            symbol,
+            model_name
+        )
+
+        if metrics is None:
+            return False
+
+        self.db.delete(metrics)
+        self.db.commit()
+
+        return True
+
+    # ---------------------------------------------------------
+    # Delete All
+    # ---------------------------------------------------------
+
+    def delete_all(
+        self,
+        symbol: str
+    ):
+
+        (
             self.db.query(ModelMetrics)
-            .filter(ModelMetrics.symbol == symbol)
+            .filter(
+                ModelMetrics.symbol == symbol
+            )
             .delete()
         )
 
-    def count(self):
-        return self.db.query(ModelMetrics).count()
+        self.db.commit()
